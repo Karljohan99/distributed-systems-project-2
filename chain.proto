@@ -12,6 +12,11 @@ service User {
   rpc RemoveHead(RemoveHeadMessage) returns (ChainResult) {}
   rpc RestoreHead(RestoreHeadMessage) returns (ChainResult) {}
   rpc Ping(Empty) returns (Empty) {}
+  rpc GetProcesses(Empty) returns (ProcessList) {}
+}
+
+message ProcessList {
+  repeated string processes = 1;
 }
 
 message Empty {}
