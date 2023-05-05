@@ -13,6 +13,7 @@ service User {
   rpc RestoreHead(RestoreHeadMessage) returns (ChainResult) {}
   rpc Ping(Empty) returns (Empty) {}
   rpc GetProcesses(Empty) returns (ProcessList) {}
+  rpc CreateProcesses(CreateProcessesMessage) returns (Empty) {}
 }
 
 message ProcessList {
@@ -84,4 +85,8 @@ message ReadOperationResult {
 
 message DataStatusResult {
   string booksStatus = 1;
+}
+
+message CreateProcessesMessage {
+  int32 amount = 1;
 }
