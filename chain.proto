@@ -18,9 +18,9 @@ service User {
 }
 
 message UpdateMessage {
-  int32 previous = 1;
+  string previous = 1;
   string current = 2;
-  int32 next = 3;
+  string next = 3;
   string head = 4;
   string tail = 5;
 }

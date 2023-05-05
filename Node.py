@@ -113,6 +113,7 @@ def createChain(node_id):
         if nodeId == node_id:
             continue
         with grpc.insecure_channel(f'localhost:{nodeId}' if LOCALHOST else f'192.168.76.5{nodeId}:50051') as channel:
+            print(previous, next)
             stub = chain_pb2_grpc.UserStub(channel)
             response = stub.UpdateProcesses(
                 chain_pb2.UpdateMessage(previous=previous, current=current, next=next, head=head, tail=tail))
@@ -135,9 +136,8 @@ def ProcessCommand(node_id, input):
                 stub.CreateProcesses(chain_pb2.CreateProcessesMessage(amount=int(params)))
         case "Create-chain":
             createChain(node_id)
-            print("todo")
         case "List-chain":
-            getProcessesFromServers(node_id)
+            print("todo")
         case "Write-operation":
             print("todo")
         case "List-books":
