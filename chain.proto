@@ -1,13 +1,5 @@
 syntax = "proto3";
 
-service ControlPanel {
-}
-
-service Node {
-  rpc Write (WriteMessage) returns (WriteReply) {}
-  rpc Read (ReadMessage) returns (ReadResult) {}
-}
-
 service User {
   rpc LocalStore(LocalStoreMessage) returns (Result) {}
   rpc CreateChain(CreateChainMessage) returns (Result) {}
@@ -19,7 +11,51 @@ service User {
   rpc DataStatus(DataStatusMessage) returns (DataStatusResult) {}
   rpc RemoveHead(RemoveHeadMessage) returns (ChainResult) {}
   rpc RestoreHead(RestoreHeadMessage) returns (ChainResult) {}
+  rpc Ping(Empty) returns (Empty) {}
 }
+
+message Empty {}
+
+message LocalStoreMessage {
+  string temp = 1;
+}
+
+message CreateChainMessage {
+  string temp = 1;
+}
+
+message ListChainMessage {
+  string temp = 1;
+}
+
+message WriteOperationMessage {
+  string temp = 1;
+}
+
+message ListBooksMessage {
+  string temp = 1;
+}
+
+message ReadOperationMessage {
+  string temp = 1;
+}
+
+message TimeOutMessage {
+  string temp = 1;
+}
+
+message DataStatusMessage {
+  string temp = 1;
+}
+
+message RemoveHeadMessage {
+  string temp = 1;
+}
+
+message RestoreHeadMessage {
+  string temp = 1;
+}
+
 
 message Result {
   bool success = 1;
