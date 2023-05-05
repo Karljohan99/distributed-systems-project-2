@@ -1,0 +1,46 @@
+syntax = "proto3";
+
+service ControlPanel {
+}
+
+service Node {
+  rpc Write (WriteMessage) returns (WriteReply) {}
+  rpc Read (ReadMessage) returns (ReadResult) {}
+}
+
+service User {
+  rpc LocalStore(LocalStoreMessage) returns (Result) {}
+  rpc CreateChain(CreateChainMessage) returns (Result) {}
+  rpc ListChain(ListChainMessage) returns (ChainResult) {}
+  rpc WriteOperation(WriteOperationMessage) returns (WriteOperationResult) {}
+  rpc ListBooks(ListBooksMessage) returns (ListBooksResult) {}
+  rpc ReadOperation(ReadOperationMessage) returns (ReadOperationResult) {}
+  rpc TimeOut(TimeOutMessage) returns (Result) {}
+  rpc DataStatus(DataStatusMessage) returns (DataStatusResult) {}
+  rpc RemoveHead(RemoveHeadMessage) returns (ChainResult) {}
+  rpc RestoreHead(RestoreHeadMessage) returns (ChainResult) {}
+}
+
+message Result {
+  bool success = 1;
+}
+
+message ChainResult {
+  string chain = 1;
+}
+
+message WriteOperationResult {
+  string bookNameAndPrice = 1;
+}
+
+message ListBooksResult {
+  string booksList = 1;
+}
+
+message ReadOperationResult {
+  string bookPrice = 1;
+}
+
+message DataStatusResult {
+  string booksStatus = 1;
+}
