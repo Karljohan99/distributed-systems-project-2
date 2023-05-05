@@ -14,6 +14,15 @@ service User {
   rpc Ping(Empty) returns (Empty) {}
   rpc GetProcesses(Empty) returns (ProcessList) {}
   rpc CreateProcesses(CreateProcessesMessage) returns (Empty) {}
+  rpc UpdateProcesses(UpdateMessage) returns (Empty) {}
+}
+
+message UpdateMessage {
+  int32 previous = 1;
+  string current = 2;
+  int32 next = 3;
+  string head = 4;
+  string tail = 5;
 }
 
 message ProcessList {
