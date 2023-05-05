@@ -44,26 +44,47 @@ class ChainServicer(chain_pb2_grpc.UserServicer):
 
     def GetProcesses(self, request, context):
         processesList = []
-        print(self.id)
         for process in self.processes:
-            print(process)
             processesList.append(f'{self.id}-{process.id}')
-        print("P-List", processesList)
         response = chain_pb2.ProcessList(processes=processesList)
-        print("Response", response)
-        # response.processes = processesList
         return response
 
     def UpdateProcesses(self, request, context):
-        print("krt")
-        print(len(self.processes))
-        print(request.current)
         self.head = request.head
         self.tail = request.tail
         current = self.processes[int(request.current.split("-")[1])]
         current.previous = request.previous
         current.next = request.next
         return chain_pb2.Empty()
+
+    def ListChain(self, request, context):
+        if request.path == "":
+            request.path += "(Head) "
+            goToNode = self.head.split("-")[0]
+            if goToNode != self.id:
+                with grpc.insecure_channel(f'localhost:{goToNode}' if LOCALHOST else f'192.168.76.5{goToNode}:50051') as channel:
+                    stub = chain_pb2_grpc.UserStub(channel)
+                    response = stub.ListChain(chain_pb2.ListChainMessage(path=request.path, next=self.head))
+                    return chain_pb2.ChainResult(chain=request.path + response.chain)
+            else:
+                current = self.processes[int(self.head.split("-")[1])]
+                goToNode = current.next.split("-")[0]
+                request.path += current.next + " -> "
+                with grpc.insecure_channel(f'localhost:{goToNode}' if LOCALHOST else f'192.168.76.5{goToNode}:50051') as channel:
+                    stub = chain_pb2_grpc.UserStub(channel)
+                    response = stub.ListChain(chain_pb2.ListChainMessage(path=request.path, next=current.next))
+                    return chain_pb2.ChainResult(chain=request.path + response.chain)
+        else:
+            current = self.processes[int(request.next.split("-")[1])]
+            request.path += request.next + " -> "
+            if current.next:
+                goToNode = current.next.split("-")[0]
+                with grpc.insecure_channel(f'localhost:{goToNode}' if LOCALHOST else f'192.168.76.5{goToNode}:50051') as channel:
+                    stub = chain_pb2_grpc.UserStub(channel)
+                    response = stub.ListChain(chain_pb2.ListChainMessage(path=request.path, next=current.next))
+                    return chain_pb2.ChainResult(chain=request.path + response.chain)
+            else:
+                return chain_pb2.ChainResult(chain=request.path[:-3] + "(Tail)")
 
 
 def get_id():
@@ -94,6 +115,7 @@ def check_command_correctness(command):
 def createChain(node_id):
     processes = getProcessesFromServers(node_id)
     shuffle(processes)
+    print("Shuffled", processes)
     # [1-1, 2-1, 2-2]
     # [2-1, 1-1, 2-2]
     head = processes[0]
@@ -113,11 +135,18 @@ def createChain(node_id):
         if nodeId == node_id:
             continue
         with grpc.insecure_channel(f'localhost:{nodeId}' if LOCALHOST else f'192.168.76.5{nodeId}:50051') as channel:
-            print(previous, next)
             stub = chain_pb2_grpc.UserStub(channel)
             response = stub.UpdateProcesses(
                 chain_pb2.UpdateMessage(previous=previous, current=current, next=next, head=head, tail=tail))
 
+
+def getChain():
+    with grpc.insecure_channel(f'localhost:{1}' if LOCALHOST else f'192.168.76.5{1}:50051') as channel:
+        stub = chain_pb2_grpc.UserStub(channel)
+        response = stub.ListChain(chain_pb2.ListChainMessage(path=""))
+        chainText = response.chain
+        response = "(Head)" + chainText.split("(Head)")[-1]
+        return response
 
 def ProcessCommand(node_id, input):
     if not check_command_correctness(input):
@@ -137,7 +166,8 @@ def ProcessCommand(node_id, input):
         case "Create-chain":
             createChain(node_id)
         case "List-chain":
-            print("todo")
+            response = getChain()
+            print(response)
         case "Write-operation":
             print("todo")
         case "List-books":
@@ -161,7 +191,6 @@ def getProcessesFromServers(node_id):
         with grpc.insecure_channel(f'localhost:{i}' if LOCALHOST else f'192.168.76.5{i}:50051') as channel:
             stub = chain_pb2_grpc.UserStub(channel)
             response = stub.GetProcesses(chain_pb2.Empty())
-            print(response.processes)
             allProcesses.extend(response.processes)
     print("All processes", allProcesses)
     return allProcesses
