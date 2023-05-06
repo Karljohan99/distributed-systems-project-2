@@ -4,7 +4,7 @@ service User {
   rpc LocalStore(LocalStoreMessage) returns (Result) {}
   rpc CreateChain(CreateChainMessage) returns (Result) {}
   rpc ListChain(ListChainMessage) returns (ChainResult) {}
-  rpc WriteOperation(WriteOperationMessage) returns (WriteOperationResult) {}
+  rpc WriteOperation(WriteOperationMessage) returns (Empty) {}
   rpc ListBooks(ListBooksMessage) returns (ListBooksResult) {}
   rpc ReadOperation(ReadOperationMessage) returns (ReadOperationResult) {}
   rpc TimeOut(TimeOutMessage) returns (Result) {}
@@ -15,6 +15,7 @@ service User {
   rpc GetProcesses(Empty) returns (ProcessList) {}
   rpc CreateProcesses(CreateProcessesMessage) returns (Empty) {}
   rpc UpdateProcesses(UpdateMessage) returns (Empty) {}
+  rpc GetHeadAndTail(Empty) returns (HeadAndTailMessage) {}
 
 }
 
@@ -46,15 +47,18 @@ message ListChainMessage {
 }
 
 message WriteOperationMessage {
-  string temp = 1;
+  string book_name = 1;
+  double price = 2; 
+  int32 process = 3;
 }
 
 message ListBooksMessage {
-  string temp = 1;
+  int32 process = 1;
 }
 
 message ReadOperationMessage {
-  string temp = 1;
+  string book_name = 1;
+  int32 process = 2;
 }
 
 message TimeOutMessage {
@@ -91,7 +95,7 @@ message ListBooksResult {
 }
 
 message ReadOperationResult {
-  string bookPrice = 1;
+  double bookPrice = 1;
 }
 
 message DataStatusResult {
@@ -100,4 +104,9 @@ message DataStatusResult {
 
 message CreateProcessesMessage {
   int32 amount = 1;
+}
+
+message HeadAndTailMessage {
+  string head = 1;
+  string tail = 2;
 }
