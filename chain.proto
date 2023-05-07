@@ -9,14 +9,14 @@ service User {
   rpc ReadOperation(ReadOperationMessage) returns (ReadOperationResult) {}
   rpc TimeOut(TimeOutMessage) returns (Result) {}
   rpc DataStatus(DataStatusMessage) returns (DataStatusResult) {}
-  rpc RemoveHead(RemoveHeadMessage) returns (ChainResult) {}
-  rpc RestoreHead(RestoreHeadMessage) returns (ChainResult) {}
+  rpc RemoveHead(RemoveHeadMessage) returns (Empty) {}
+  rpc RestoreHead(RestoreHeadMessage) returns (Empty) {}
   rpc Ping(Empty) returns (Empty) {}
   rpc GetProcesses(Empty) returns (ProcessList) {}
   rpc CreateProcesses(CreateProcessesMessage) returns (Empty) {}
   rpc UpdateProcesses(UpdateMessage) returns (Empty) {}
   rpc GetHeadAndTail(Empty) returns (HeadAndTailMessage) {}
-
+  rpc CheckPendingRemoval(Empty) returns (PendingStatus) {}
 }
 
 message UpdateMessage {
@@ -25,6 +25,10 @@ message UpdateMessage {
   string next = 3;
   string head = 4;
   string tail = 5;
+}
+
+message PendingStatus {
+    bool isNone = 1;
 }
 
 message ProcessList {
@@ -70,11 +74,12 @@ message DataStatusMessage {
 }
 
 message RemoveHeadMessage {
-  string temp = 1;
+  string head = 1;
+  string newHead = 2;
 }
 
 message RestoreHeadMessage {
-  string temp = 1;
+  string head = 1;
 }
 
 

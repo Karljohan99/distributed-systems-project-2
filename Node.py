@@ -30,6 +30,9 @@ class ChainServicer(chain_pb2_grpc.UserServicer):
         self.processes = []
         self.tail = None
         self.head = None
+        self.pendingRemoval = None
+        self.pendingRemovalStr = None
+        self.operationCount = 0
 
     def Ping(self, request, context):
         return chain_pb2.Empty()
@@ -64,7 +67,7 @@ class ChainServicer(chain_pb2_grpc.UserServicer):
             request.path += "(Head) "
             goToNode = self.head.split("-")[0]
             if goToNode != self.id:
-                with grpc.insecure_channel(f'localhost:{goToNode}' if LOCALHOST else f'192.168.76.5{goToNode}:50051') as channel:
+                with grpc.insecure_channel(f'localhost:5005{goToNode}' if LOCALHOST else f'192.168.76.5{goToNode}:50051') as channel:
                     stub = chain_pb2_grpc.UserStub(channel)
                     response = stub.ListChain(chain_pb2.ListChainMessage(path=request.path, next=self.head))
                     return chain_pb2.ChainResult(chain=request.path + response.chain)
@@ -72,7 +75,7 @@ class ChainServicer(chain_pb2_grpc.UserServicer):
                 current = self.processes[int(self.head.split("-")[1])]
                 goToNode = current.next.split("-")[0]
                 request.path += current.next + " -> "
-                with grpc.insecure_channel(f'localhost:{goToNode}' if LOCALHOST else f'192.168.76.5{goToNode}:50051') as channel:
+                with grpc.insecure_channel(f'localhost:5005{goToNode}' if LOCALHOST else f'192.168.76.5{goToNode}:50051') as channel:
                     stub = chain_pb2_grpc.UserStub(channel)
                     response = stub.ListChain(chain_pb2.ListChainMessage(path=request.path, next=current.next))
                     return chain_pb2.ChainResult(chain=request.path + response.chain)
@@ -81,7 +84,7 @@ class ChainServicer(chain_pb2_grpc.UserServicer):
             request.path += request.next + " -> "
             if current.next:
                 goToNode = current.next.split("-")[0]
-                with grpc.insecure_channel(f'localhost:{goToNode}' if LOCALHOST else f'192.168.76.5{goToNode}:50051') as channel:
+                with grpc.insecure_channel(f'localhost:5005{goToNode}' if LOCALHOST else f'192.168.76.5{goToNode}:50051') as channel:
                     stub = chain_pb2_grpc.UserStub(channel)
                     response = stub.ListChain(chain_pb2.ListChainMessage(path=request.path, next=current.next))
                     return chain_pb2.ChainResult(chain=request.path + response.chain)
@@ -91,11 +94,13 @@ class ChainServicer(chain_pb2_grpc.UserServicer):
     def WriteOperation(self, request, context):
         process = self.processes[request.process]
         process.books[request.book_name] = (request.price, False)
+        self.updateOperationCount()
+        
         if process.next != "":
             next_node = int(process.next.split("-")[0])
             next_prc = int(process.next.split("-")[1])
             with grpc.insecure_channel(
-                    f'localhost:{next_node}' if LOCALHOST else f'192.168.76.5{next_node}:50051') as channel:
+                    f'localhost:5005{next_node}' if LOCALHOST else f'192.168.76.5{next_node}:50051') as channel:
                 stub = chain_pb2_grpc.UserStub(channel)
                 stub.WriteOperation(chain_pb2.WriteOperationMessage(book_name=request.book_name, price=request.price, process=next_prc))
         return chain_pb2.Empty()
@@ -112,23 +117,68 @@ class ChainServicer(chain_pb2_grpc.UserServicer):
     def ReadOperation(self, request, context):
         process = self.processes[request.process]
         price = process.books.get(request.book_name, (-1.0, True))[0]
-
+        self.updateOperationCount()
+        
         #Consult head
         if self.head != f"{self.id}-{request.process}":
             head_node = int(self.head.split("-")[0])
             head_prc = int(self.head.split("-")[1])
             with grpc.insecure_channel(
-                    f'localhost:{head_node}' if LOCALHOST else f'192.168.76.5{head_node}:50051') as channel:
+                    f'localhost:5005{head_node}' if LOCALHOST else f'192.168.76.5{head_node}:50051') as channel:
                 stub = chain_pb2_grpc.UserStub(channel)
                 response = stub.ReadOperation(chain_pb2.ReadOperationMessage(book_name=request.book_name, process=head_prc))
                 price = response.bookPrice
                 
         return chain_pb2.ReadOperationResult(bookPrice=price)
+    
+    def updateOperationCount(self):
+        self.operationCount += 1
+        if self.operationCount > 5:
+            self.pendingRemoval = None
+            self.pendingRemovalStr = None
+        
+    def RemoveHead(self, request, context):
+        nodeId = int(request.head.split("-")[0])
+        prcId = int(request.head.split("-")[1])
+        newHeadId = int(request.newHead.split("-")[0])
+        newHeadPrc = int(request.newHead.split("-")[1])
+        if nodeId == self.id:
+            for i, p in enumerate(self.processes):
+                if p.id == prcId:
+                    self.pendingRemoval = self.processes.pop(i)
+        else:
+            self.pendingRemoval = None
+            if self.id == newHeadId:
+                for p in self.processes:
+                    if p.id == newHeadPrc:
+                        p.previous = None
+        self.pendingRemovalStr = request.head
+        return chain_pb2.Empty()
+    
+    def CheckPendingRemoval(self, request, context):
+        return chain_pb2.PendingStatus(isNone=self.pendingRemoval is None)
+    
+    def RestoreHead(self, request, context):
+        head = request.head
+        node = int(head.split('-')[0])
+        prc = int(head.split('-')[1])
+        if self.id == node:
+            for p in self.processes:
+                if p.id == prc:
+                    p.previous = self.pendingRemovalStr
+        if self.pendingRemoval is not None:
+            if len(self.processes) > 0:
+                self.pendingRemoval.books = self.processes[0].books
+            self.processes.append(self.pendingRemoval)
+        self.pendingRemoval = None
+        self.pendingRemovalStr = None
+        self.operationCount = 0
+        return chain_pb2.Empty()
 
 
 def get_id():
     for i in range(1, MAX_NODES + 1):
-        with grpc.insecure_channel(f'localhost:{i}' if LOCALHOST else f'192.168.76.5{i}:50051') as channel:
+        with grpc.insecure_channel(f'localhost:5005{i}' if LOCALHOST else f'192.168.76.5{i}:50051') as channel:
             stub = chain_pb2_grpc.UserStub(channel)
             try:
                 stub.Ping(chain_pb2.Empty())
@@ -173,7 +223,7 @@ def createChain(node_id):
         process_id = pr.split("-")[1]
         if nodeId == node_id:
             continue
-        with grpc.insecure_channel(f'localhost:{nodeId}' if LOCALHOST else f'192.168.76.5{nodeId}:50051') as channel:
+        with grpc.insecure_channel(f'localhost:5005{nodeId}' if LOCALHOST else f'192.168.76.5{nodeId}:50051') as channel:
             stub = chain_pb2_grpc.UserStub(channel)
             response = stub.UpdateProcesses(
                 chain_pb2.UpdateMessage(previous=previous, current=current, next=next, head=head, tail=tail))
@@ -181,7 +231,7 @@ def createChain(node_id):
 
 
 def getChain():
-    with grpc.insecure_channel(f'localhost:{1}' if LOCALHOST else f'192.168.76.5{1}:50051') as channel:
+    with grpc.insecure_channel(f'localhost:5005{1}' if LOCALHOST else f'192.168.76.5{1}:50051') as channel:
         stub = chain_pb2_grpc.UserStub(channel)
         response = stub.ListChain(chain_pb2.ListChainMessage(path=""))
         chainText = response.chain
@@ -189,11 +239,35 @@ def getChain():
         return response
     
 def getHeadandTail(node_id):
-    with grpc.insecure_channel(f'localhost:{node_id}' if LOCALHOST else f'192.168.76.5{node_id}:50051') as channel:
+    with grpc.insecure_channel(f'localhost:5005{node_id}' if LOCALHOST else f'192.168.76.5{node_id}:50051') as channel:
         stub = chain_pb2_grpc.UserStub(channel)
         response = stub.GetHeadAndTail(chain_pb2.Empty())
         return response.head, response.tail
-
+    
+def removeHead():
+    chain = getChain()
+    head = chain.split(' ')[1]
+    newHead = chain.split(' ')[3]
+    for i in range(1, MAX_NODES + 1):
+        with grpc.insecure_channel(f'localhost:5005{i}' if LOCALHOST else f'192.168.76.5{i}:50051') as channel:
+            stub = chain_pb2_grpc.UserStub(channel)
+            stub.RemoveHead(chain_pb2.RemoveHeadMessage(head=head, newHead=newHead))
+    
+    print(getChain())
+            
+def restoreHead():
+    chain = getChain()
+    head = chain.split(' ')[1]
+    node = int(head.split('-')[0])
+    prc = int(head.split('-')[1])
+    with grpc.insecure_channel(f'localhost:5005{node}' if LOCALHOST else f'192.168.76.5{node}:50051') as channel:
+        stub = chain_pb2_grpc.UserStub(channel)
+        response = stub.CheckPendingRemoval(chain_pb2.Empty())
+    if not response.isNone:
+        for i in range(1, MAX_NODES + 1):
+            with grpc.insecure_channel(f'localhost:5005{i}' if LOCALHOST else f'192.168.76.5{i}:50051') as channel:
+                stub = chain_pb2_grpc.UserStub(channel)
+                response = chain_pb2_grpc.RestoreHead(chain_pb2.RestoreHeadMessage(head=head))
 
 def ProcessCommand(node_id, input, head, tail):
     if not check_command_correctness(input):
@@ -207,7 +281,7 @@ def ProcessCommand(node_id, input, head, tail):
     match base_cmd:
         case "Local-store-ps":
             with grpc.insecure_channel(
-                    f'localhost:{node_id}' if LOCALHOST else f'192.168.76.5{node_id}:50051') as channel:
+                    f'localhost:5005{node_id}' if LOCALHOST else f'192.168.76.5{node_id}:50051') as channel:
                 stub = chain_pb2_grpc.UserStub(channel)
                 stub.CreateProcesses(chain_pb2.CreateProcessesMessage(amount=int(params)))
         case "Create-chain":
@@ -225,7 +299,7 @@ def ProcessCommand(node_id, input, head, tail):
             head_node = int(head.split("-")[0])
             head_prc = int(head.split("-")[1])
             with grpc.insecure_channel(
-                    f'localhost:{head_node}' if LOCALHOST else f'192.168.76.5{head_node}:50051') as channel:
+                    f'localhost:5005{head_node}' if LOCALHOST else f'192.168.76.5{head_node}:50051') as channel:
                 stub = chain_pb2_grpc.UserStub(channel)
                 stub.WriteOperation(chain_pb2.WriteOperationMessage(book_name=book_name, price=price, process=head_prc))
         case "List-books":
@@ -234,7 +308,7 @@ def ProcessCommand(node_id, input, head, tail):
             tail_node = int(tail.split("-")[0])
             tail_prc = int(tail.split("-")[1])
             with grpc.insecure_channel(
-                    f'localhost:{tail_node}' if LOCALHOST else f'192.168.76.5{tail_node}:50051') as channel:
+                    f'localhost:5005{tail_node}' if LOCALHOST else f'192.168.76.5{tail_node}:50051') as channel:
                 stub = chain_pb2_grpc.UserStub(channel)
                 response = stub.ListBooks(chain_pb2.ListBooksMessage(process=tail_prc))
                 print(response.booksList)
@@ -247,7 +321,7 @@ def ProcessCommand(node_id, input, head, tail):
             tail_node = int(tail.split("-")[0])
             tail_prc = int(tail.split("-")[1])
             with grpc.insecure_channel(
-                    f'localhost:{tail_node}' if LOCALHOST else f'192.168.76.5{tail_node}:50051') as channel:
+                    f'localhost:5005{tail_node}' if LOCALHOST else f'192.168.76.5{tail_node}:50051') as channel:
                 stub = chain_pb2_grpc.UserStub(channel)
                 response = stub.ReadOperation(chain_pb2.ReadOperationMessage(book_name=book_name, process=tail_prc))
                 if response.bookPrice > 0:
@@ -259,16 +333,16 @@ def ProcessCommand(node_id, input, head, tail):
         case "Data-status":
             print("todo")
         case "Remove-head":
-            print("todo")
+            removeHead()
         case "Restore-head":
-            print("todo")
+            restoreHead()
     return head, tail
 
 
 def getProcessesFromServers(node_id):
     allProcesses = []
     for i in range(1, MAX_NODES + 1):
-        with grpc.insecure_channel(f'localhost:{i}' if LOCALHOST else f'192.168.76.5{i}:50051') as channel:
+        with grpc.insecure_channel(f'localhost:5005{i}' if LOCALHOST else f'192.168.76.5{i}:50051') as channel:
             stub = chain_pb2_grpc.UserStub(channel)
             response = stub.GetProcesses(chain_pb2.Empty())
             allProcesses.extend(response.processes)
@@ -285,7 +359,7 @@ def serve():
     server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
     chain_pb2_grpc.add_UserServicer_to_server(
         ChainServicer(node_id), server)
-    server.add_insecure_port(f'localhost:{node_id}' if LOCALHOST else f'192.168.76.5{node_id}:50051')
+    server.add_insecure_port(f'localhost:5005{node_id}' if LOCALHOST else f'192.168.76.5{node_id}:50051')
     server.start()
     #print(f"Server started listening on port 50051")
     head, tail = None, None
