@@ -1,10 +1,11 @@
 syntax = "proto3";
 
+
 service User {
   rpc LocalStore(LocalStoreMessage) returns (Result) {}
   rpc CreateChain(CreateChainMessage) returns (Result) {}
   rpc ListChain(ListChainMessage) returns (ChainResult) {}
-  rpc WriteOperation(WriteOperationMessage) returns (Empty) {}
+  rpc WriteOperation(WriteOperationMessage) returns (WriteOperationResult) {}
   rpc ListBooks(ListBooksMessage) returns (ListBooksResult) {}
   rpc ReadOperation(ReadOperationMessage) returns (ReadOperationResult) {}
   rpc TimeOut(TimeOutMessage) returns (Result) {}
@@ -66,11 +67,11 @@ message ReadOperationMessage {
 }
 
 message TimeOutMessage {
-  string temp = 1;
+  int32 timeout = 1;
 }
 
 message DataStatusMessage {
-  string temp = 1;
+  int32 process = 1;
 }
 
 message RemoveHeadMessage {
@@ -92,7 +93,8 @@ message ChainResult {
 }
 
 message WriteOperationResult {
-  string bookNameAndPrice = 1;
+  bool success = 1;
+  string bookNameAndPrice = 2;
 }
 
 message ListBooksResult {
