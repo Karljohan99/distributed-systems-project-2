@@ -6,7 +6,7 @@ import chain_pb2
 import chain_pb2_grpc
 from random import shuffle
 
-MAX_NODES = 3  # Maximum number of nodes allowed
+MAX_NODES = 2  # Maximum number of nodes allowed
 LOCALHOST = True  # Set True to run all Nodes locally
 
 
@@ -175,27 +175,19 @@ class ChainServicer(chain_pb2_grpc.UserServicer):
         return chain_pb2.Empty()
     
     def CheckPendingRemoval(self, request, context):
-        return chain_pb2.PendingStatus(isNone=self.pendingRemoval is None)
+        return chain_pb2.PendingStatus(isNone=self.pendingRemovalStr is None)
     
     def RestoreHead(self, request, context):
         head = request.head
         node = int(head.split('-')[0])
         prc = int(head.split('-')[1])
-        if self.pendingRemovalStr is not None:
-            if self.id == node:
-                for p in self.processes:
-                    if p.id == prc:
-                        p.previous = self.pendingRemovalStr
-            if self.pendingRemoval is not None:
-                if len(self.processes) > 0:
-                    self.pendingRemoval.books = self.processes[0].books
-                self.processes.append(self.pendingRemoval)
-            self.pendingRemoval = None
-            returnStmt = self.pendingRemovalStr
-            self.pendingRemovalStr = None
-            self.operationCount = 0
-            return chain_pb2.RestoreHeadResponse(newHead=returnStmt)
-        return chain_pb2.RestoreHeadResponse(newHead=None)
+        if node == self.id:
+            self.processes[prc].previous = self.pendingRemovalStr
+        self.head = self.pendingRemovalStr
+        self.pendingRemoval = None
+        self.pendingRemovalStr = None
+        self.operationCount = 0
+        return chain_pb2.RestoreHeadResponse(newHead=self.head)
 
 
 def get_id():
