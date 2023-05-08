@@ -97,7 +97,8 @@ class ChainServicer(chain_pb2_grpc.UserServicer):
         process = self.processes[request.process]
         process.books[request.book_name] = (request.price, False)
         time.sleep(self.timeout)
-        
+        self.updateOperationCount()
+
         if process.next != "":
             next_node = int(process.next.split("-")[0])
             next_prc = int(process.next.split("-")[1])
@@ -115,8 +116,8 @@ class ChainServicer(chain_pb2_grpc.UserServicer):
             nameAndPrice = f"{request.book_name} = {process.books[request.book_name][0]} EUR"
             process.books[request.book_name] = (process.books[request.book_name][0], True)
             return chain_pb2.WriteOperationResult(success=True, bookNameAndPrice=nameAndPrice)
-        
-    
+
+
     def ListBooks(self, request, context):
         tail = self.processes[request.process]
         book_list = ""
@@ -125,11 +126,12 @@ class ChainServicer(chain_pb2_grpc.UserServicer):
             book_list += f"{i}) {name} = {price} EUR\n"
             i += 1
         return chain_pb2.ListBooksResult(booksList=book_list)
-    
+
     def ReadOperation(self, request, context):
         process = self.processes[request.process]
         price = process.books.get(request.book_name, (-1.0, True))[0]
-        
+        self.updateOperationCount()
+
         #Consult head
         if self.head != f"{self.id}-{request.process}":
             head_node = int(self.head.split("-")[0])
@@ -139,13 +141,13 @@ class ChainServicer(chain_pb2_grpc.UserServicer):
                 stub = chain_pb2_grpc.UserStub(channel)
                 response = stub.ReadOperation(chain_pb2.ReadOperationMessage(book_name=request.book_name, process=head_prc))
                 price = response.bookPrice
-                
+
         return chain_pb2.ReadOperationResult(bookPrice=price)
-        
+
     def TimeOut(self, request, context):
         self.timeout = request.timeout
         return chain_pb2.Empty()
-    
+
     def DataStatus(self, request, context):
         head = self.processes[request.process]
         i = 1
@@ -153,16 +155,15 @@ class ChainServicer(chain_pb2_grpc.UserServicer):
         status = ""
         for name, (_, clean) in head.books.items():
             status += f"{i}) {name} - {cln(clean)}\n"
-            i += 1 
+            i += 1
         return chain_pb2.DataStatusResult(booksStatus=status)
-    
-    def UpdateOperationCount(self, request, context):
+
+    def updateOperationCount(self):
         self.operationCount += 1
         if self.operationCount > 5:
             self.pendingRemoval = None
             self.pendingRemovalStr = None
-        return chain_pb2.Empty()
-        
+
     def RemoveHead(self, request, context):
         newHeadId = int(request.newHead.split("-")[0])
         newHeadPrc = int(request.newHead.split("-")[1])
@@ -172,18 +173,15 @@ class ChainServicer(chain_pb2_grpc.UserServicer):
         self.head = request.newHead
         self.pendingRemovalStr = request.head
         return chain_pb2.Empty()
-    
+
     def CheckPendingRemoval(self, request, context):
         return chain_pb2.PendingStatus(isNone=self.pendingRemovalStr is None)
-    
+
     def RestoreHead(self, request, context):
         head = request.head
         node = int(head.split('-')[0])
         prc = int(head.split('-')[1])
         if node == self.id:
-            for p in self.processes:
-                if p.id != prc:
-                    self.processes[prc].books = p.books
             self.processes[prc].previous = self.pendingRemovalStr
         self.head = self.pendingRemovalStr
         self.pendingRemoval = None
@@ -253,13 +251,13 @@ def getChain():
         chainText = response.chain
         response = "(Head)" + chainText.split("(Head)")[-1]
         return response
-    
+
 def getHeadandTail(node_id):
     with grpc.insecure_channel(f'localhost:5005{node_id}' if LOCALHOST else f'192.168.76.5{node_id}:50051') as channel:
         stub = chain_pb2_grpc.UserStub(channel)
         response = stub.GetHeadAndTail(chain_pb2.Empty())
         return response.head, response.tail
-    
+
 def removeHead():
     chain = getChain()
     head = chain.split(' ')[1]
@@ -269,10 +267,10 @@ def removeHead():
         with grpc.insecure_channel(f'localhost:5005{i}' if LOCALHOST else f'192.168.76.5{i}:50051') as channel:
             stub = chain_pb2_grpc.UserStub(channel)
             stub.RemoveHead(chain_pb2.RemoveHeadMessage(head=head, newHead=newHead))
-    
+
     print(getChain())
     return newHead
-            
+
 def restoreHead():
     chain = getChain()
     head = chain.split(' ')[1]
@@ -306,86 +304,97 @@ def ProcessCommand(node_id, input, head, tail):
                 stub = chain_pb2_grpc.UserStub(channel)
                 stub.CreateProcesses(chain_pb2.CreateProcessesMessage(amount=int(params)))
         case "Create-chain":
-            return createChain(node_id)
+            try:
+                return createChain(node_id)
+            except:
+                print("There might be no processes.")
         case "List-chain":
-            response = getChain()
-            print(response)
+            try:
+                response = getChain()
+                print(response)
+            except:
+                print("There is no chain.")
         case "Write-operation":
-            if head is None or tail is None:
-                head, tail = getHeadandTail(node_id)
-                
-            search = re.search('<"(.+)", (\d+.\d+)>', params, re.IGNORECASE)
-            book_name = search.group(1)
-            price = float(search.group(2))
-            head_node = int(head.split("-")[0])
-            head_prc = int(head.split("-")[1])
-            with grpc.insecure_channel(
-                    f'localhost:5005{head_node}' if LOCALHOST else f'192.168.76.5{head_node}:50051') as channel:
-                stub = chain_pb2_grpc.UserStub(channel)
-                response = stub.WriteOperation(chain_pb2.WriteOperationMessage(book_name=book_name, price=price, process=head_prc))
-            if response.success:
-                for i in range(1, MAX_NODES + 1):
-                    try:
-                        with grpc.insecure_channel(f'localhost:5005{i}' if LOCALHOST else f'192.168.76.5{i}:50051') as channel:
-                            stub = chain_pb2_grpc.UserStub(channel)
-                            response = stub.UpdateOperationCount(chain_pb2.Empty())
-                    except:
-                        pass
-            print(response.bookNameAndPrice)
-                
-        case "List-books":
-            if head is None or tail is None:
-                head, tail = getHeadandTail(node_id)
-            tail_node = int(tail.split("-")[0])
-            tail_prc = int(tail.split("-")[1])
-            with grpc.insecure_channel(
-                    f'localhost:5005{tail_node}' if LOCALHOST else f'192.168.76.5{tail_node}:50051') as channel:
-                stub = chain_pb2_grpc.UserStub(channel)
-                response = stub.ListBooks(chain_pb2.ListBooksMessage(process=tail_prc))
-                print(response.booksList)
-        case "Read-operation":
-            if head is None or tail is None:
-                head, tail = getHeadandTail(node_id)
-                
-            search = re.search('"(.+)"', params, re.IGNORECASE)
-            book_name = search.group(1)
-            tail_node = int(tail.split("-")[0])
-            tail_prc = int(tail.split("-")[1])
-            with grpc.insecure_channel(
-                    f'localhost:5005{tail_node}' if LOCALHOST else f'192.168.76.5{tail_node}:50051') as channel:
-                stub = chain_pb2_grpc.UserStub(channel)
-                response = stub.ReadOperation(chain_pb2.ReadOperationMessage(book_name=book_name, process=tail_prc))
-                for i in range(1, MAX_NODES + 1):
-                    try:
-                        with grpc.insecure_channel(f'localhost:5005{i}' if LOCALHOST else f'192.168.76.5{i}:50051') as channel:
-                            stub = chain_pb2_grpc.UserStub(channel)
-                            response = stub.UpdateOperationCount(chain_pb2.Empty())
-                    except:
-                        pass
-                if response.bookPrice > 0:
-                    print(f"{response.bookPrice} EUR")
-                else:
-                    print("Not yet in the stock")
-        case "Time-out":
-            for i in range(1, MAX_NODES + 1):
-                with grpc.insecure_channel(f'localhost:5005{i}' if LOCALHOST else f'192.168.76.5{i}:50051') as channel:
+            try:
+                if head is None or tail is None:
+                    head, tail = getHeadandTail(node_id)
+
+                search = re.search('<"(.+)", (\d+.\d+)>', params, re.IGNORECASE)
+                book_name = search.group(1)
+                price = float(search.group(2))
+                head_node = int(head.split("-")[0])
+                head_prc = int(head.split("-")[1])
+                with grpc.insecure_channel(
+                        f'localhost:5005{head_node}' if LOCALHOST else f'192.168.76.5{head_node}:50051') as channel:
                     stub = chain_pb2_grpc.UserStub(channel)
-                    stub.TimeOut(chain_pb2.TimeOutMessage(timeout=int(params)))
-                    
+                    response = stub.WriteOperation(chain_pb2.WriteOperationMessage(book_name=book_name, price=price, process=head_prc))
+                print(response.bookNameAndPrice)
+            except:
+                print("There is no chain.")
+
+        case "List-books":
+            try:
+                if head is None or tail is None:
+                    head, tail = getHeadandTail(node_id)
+                tail_node = int(tail.split("-")[0])
+                tail_prc = int(tail.split("-")[1])
+                with grpc.insecure_channel(
+                        f'localhost:5005{tail_node}' if LOCALHOST else f'192.168.76.5{tail_node}:50051') as channel:
+                    stub = chain_pb2_grpc.UserStub(channel)
+                    response = stub.ListBooks(chain_pb2.ListBooksMessage(process=tail_prc))
+                    print(response.booksList)
+            except:
+                print("There is no chain.")
+        case "Read-operation":
+            try:
+                if head is None or tail is None:
+                    head, tail = getHeadandTail(node_id)
+
+                search = re.search('"(.+)"', params, re.IGNORECASE)
+                book_name = search.group(1)
+                tail_node = int(tail.split("-")[0])
+                tail_prc = int(tail.split("-")[1])
+                with grpc.insecure_channel(
+                        f'localhost:5005{tail_node}' if LOCALHOST else f'192.168.76.5{tail_node}:50051') as channel:
+                    stub = chain_pb2_grpc.UserStub(channel)
+                    response = stub.ReadOperation(chain_pb2.ReadOperationMessage(book_name=book_name, process=tail_prc))
+                    if response.bookPrice > 0:
+                        print(f"{response.bookPrice} EUR")
+                    else:
+                        print("Not yet in the stock")
+            except:
+                print("There is no chain.")
+        case "Time-out":
+            try:
+                for i in range(1, MAX_NODES + 1):
+                    with grpc.insecure_channel(f'localhost:5005{i}' if LOCALHOST else f'192.168.76.5{i}:50051') as channel:
+                        stub = chain_pb2_grpc.UserStub(channel)
+                        stub.TimeOut(chain_pb2.TimeOutMessage(timeout=int(params)))
+            except:
+                print("Setting time-out failed.")
         case "Data-status":
-            if head is None or tail is None:
-                head, tail = getHeadandTail(node_id)
-            head_node = int(head.split("-")[0])
-            head_prc = int(head.split("-")[1])
-            with grpc.insecure_channel(
-                    f'localhost:5005{head_node}' if LOCALHOST else f'192.168.76.5{head_node}:50051') as channel:
-                stub = chain_pb2_grpc.UserStub(channel)
-                response = stub.DataStatus(chain_pb2.DataStatusMessage(process=head_prc))
-                print(response.booksStatus)
+            try:
+                if head is None or tail is None:
+                    head, tail = getHeadandTail(node_id)
+                head_node = int(head.split("-")[0])
+                head_prc = int(head.split("-")[1])
+                with grpc.insecure_channel(
+                        f'localhost:5005{head_node}' if LOCALHOST else f'192.168.76.5{head_node}:50051') as channel:
+                    stub = chain_pb2_grpc.UserStub(channel)
+                    response = stub.DataStatus(chain_pb2.DataStatusMessage(process=head_prc))
+                    print(response.booksStatus)
+            except:
+                print("Failed to get data-status.")
         case "Remove-head":
-            head = removeHead()
+            try:
+                head = removeHead()
+            except:
+                print("There is no head to remove.")
         case "Restore-head":
-            head = restoreHead()
+            try:
+                head = restoreHead()
+            except:
+                print("There is no head to restore.")
     return head, tail
 
 
