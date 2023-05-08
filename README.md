@@ -7,3 +7,6 @@ When chain is created, processes have previous and next processes. Write command
 From each node it's possible to enter commands to change data in chain, read current status, change chain. \
 
 We followed project's description to implement the model (see PDF for more details).
+
+### System blueprint
+![Blueprint](blueprint.png)
