@@ -351,7 +351,7 @@ def ProcessCommand(node_id, input, head, tail):
                     print("Not yet in the stock")
         case "Time-out":
             for i in range(1, MAX_NODES + 1):
-                with grpc.insecure_channel(f'localhost:{i}' if LOCALHOST else f'192.168.76.5{i}:50051') as channel:
+                with grpc.insecure_channel(f'localhost:5005{i}' if LOCALHOST else f'192.168.76.5{i}:50051') as channel:
                     stub = chain_pb2_grpc.UserStub(channel)
                     stub.TimeOut(chain_pb2.TimeOutMessage(timeout=int(params)))
                     
@@ -361,7 +361,7 @@ def ProcessCommand(node_id, input, head, tail):
             head_node = int(head.split("-")[0])
             head_prc = int(head.split("-")[1])
             with grpc.insecure_channel(
-                    f'localhost:{head_node}' if LOCALHOST else f'192.168.76.5{head_node}:50051') as channel:
+                    f'localhost:5005{head_node}' if LOCALHOST else f'192.168.76.5{head_node}:50051') as channel:
                 stub = chain_pb2_grpc.UserStub(channel)
                 response = stub.DataStatus(chain_pb2.DataStatusMessage(process=head_prc))
                 print(response.booksStatus)
