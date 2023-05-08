@@ -6,7 +6,7 @@ import chain_pb2
 import chain_pb2_grpc
 from random import shuffle
 
-MAX_NODES = 2  # Maximum number of nodes allowed
+MAX_NODES = 3  # Maximum number of nodes allowed
 LOCALHOST = True  # Set True to run all Nodes locally
 
 
@@ -76,14 +76,14 @@ class ChainServicer(chain_pb2_grpc.UserServicer):
             else:
                 current = self.processes[int(self.head.split("-")[1])]
                 goToNode = current.next.split("-")[0]
-                request.path += current.next + " -> "
+                request.path += "Node" + current.next.split("-")[0] + "-PS" + current.next.split("-")[1] + " -> "
                 with grpc.insecure_channel(f'localhost:5005{goToNode}' if LOCALHOST else f'192.168.76.5{goToNode}:50051') as channel:
                     stub = chain_pb2_grpc.UserStub(channel)
                     response = stub.ListChain(chain_pb2.ListChainMessage(path=request.path, next=current.next))
                     return chain_pb2.ChainResult(chain=request.path + response.chain)
         else:
             current = self.processes[int(request.next.split("-")[1])]
-            request.path += request.next + " -> "
+            request.path += "Node" + request.next.split("-")[0] + "-PS" + request.next.split("-")[1] + " -> "
             if current.next:
                 goToNode = current.next.split("-")[0]
                 with grpc.insecure_channel(f'localhost:5005{goToNode}' if LOCALHOST else f'192.168.76.5{goToNode}:50051') as channel:
