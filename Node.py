@@ -179,6 +179,7 @@ class ChainServicer(chain_pb2_grpc.UserServicer):
                 for p in self.processes:
                     if p.id == newHeadPrc:
                         p.previous = None
+        self.head = request.newHead
         self.pendingRemovalStr = request.head
         return chain_pb2.Empty()
     
@@ -189,18 +190,21 @@ class ChainServicer(chain_pb2_grpc.UserServicer):
         head = request.head
         node = int(head.split('-')[0])
         prc = int(head.split('-')[1])
-        if self.id == node:
-            for p in self.processes:
-                if p.id == prc:
-                    p.previous = self.pendingRemovalStr
-        if self.pendingRemoval is not None:
-            if len(self.processes) > 0:
-                self.pendingRemoval.books = self.processes[0].books
-            self.processes.append(self.pendingRemoval)
-        self.pendingRemoval = None
-        self.pendingRemovalStr = None
-        self.operationCount = 0
-        return chain_pb2.Empty()
+        if self.pendingRemovalStr is not None:
+            if self.id == node:
+                for p in self.processes:
+                    if p.id == prc:
+                        p.previous = self.pendingRemovalStr
+            if self.pendingRemoval is not None:
+                if len(self.processes) > 0:
+                    self.pendingRemoval.books = self.processes[0].books
+                self.processes.append(self.pendingRemoval)
+            self.pendingRemoval = None
+            returnStmt = self.pendingRemovalStr
+            self.pendingRemovalStr = None
+            self.operationCount = 0
+            return chain_pb2.RestoreHeadResponse(newHead=returnStmt)
+        return chain_pb2.RestoreHeadResponse(newHead=None)
 
 
 def get_id():
@@ -281,6 +285,7 @@ def removeHead():
             stub.RemoveHead(chain_pb2.RemoveHeadMessage(head=head, newHead=newHead))
     
     print(getChain())
+    return newHead
             
 def restoreHead():
     chain = getChain()
@@ -295,6 +300,9 @@ def restoreHead():
             with grpc.insecure_channel(f'localhost:5005{i}' if LOCALHOST else f'192.168.76.5{i}:50051') as channel:
                 stub = chain_pb2_grpc.UserStub(channel)
                 response = chain_pb2_grpc.RestoreHead(chain_pb2.RestoreHeadMessage(head=head))
+        if response.newHead is not None:
+            return response.newHead
+    return head
 
 def ProcessCommand(node_id, input, head, tail):
     if not check_command_correctness(input):
@@ -374,9 +382,9 @@ def ProcessCommand(node_id, input, head, tail):
                 response = stub.DataStatus(chain_pb2.DataStatusMessage(process=head_prc))
                 print(response.booksStatus)
         case "Remove-head":
-            removeHead()
+            head = removeHead()
         case "Restore-head":
-            restoreHead()
+            head = restoreHead()
     return head, tail
 
 

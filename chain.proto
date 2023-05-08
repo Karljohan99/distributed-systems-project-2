@@ -11,7 +11,7 @@ service User {
   rpc TimeOut(TimeOutMessage) returns (Result) {}
   rpc DataStatus(DataStatusMessage) returns (DataStatusResult) {}
   rpc RemoveHead(RemoveHeadMessage) returns (Empty) {}
-  rpc RestoreHead(RestoreHeadMessage) returns (Empty) {}
+  rpc RestoreHead(RestoreHeadMessage) returns (RestoreHeadResponse) {}
   rpc Ping(Empty) returns (Empty) {}
   rpc GetProcesses(Empty) returns (ProcessList) {}
   rpc CreateProcesses(CreateProcessesMessage) returns (Empty) {}
@@ -26,6 +26,10 @@ message UpdateMessage {
   string next = 3;
   string head = 4;
   string tail = 5;
+}
+
+message RestoreHeadResponse {
+    string newHead = 1;
 }
 
 message PendingStatus {
