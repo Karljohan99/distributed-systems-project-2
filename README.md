@@ -8,5 +8,7 @@ From each node, it's possible to enter commands to modify the data in the proces
 
 The implementation of the system closely followed the project's description, meaning the PDF document explains the architecture of the implemented system quite well.
 
+Link to the video: https://youtu.be/pJZESRunNNE
+
 ### System blueprint
 ![Blueprint](blueprint.png)
