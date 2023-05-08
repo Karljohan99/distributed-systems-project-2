@@ -7,7 +7,7 @@ import chain_pb2_grpc
 from random import shuffle
 
 MAX_NODES = 3  # Maximum number of nodes allowed
-LOCALHOST = True  # Set True to run all Nodes locally
+LOCALHOST = False  # Set True to run all Nodes locally
 
 
 class Process():
