@@ -12,6 +12,7 @@ service User {
   rpc DataStatus(DataStatusMessage) returns (DataStatusResult) {}
   rpc RemoveHead(RemoveHeadMessage) returns (Empty) {}
   rpc RestoreHead(RestoreHeadMessage) returns (RestoreHeadResponse) {}
+  rpc UpdateOperationCount(Empty) returns (Empty) {}
   rpc Ping(Empty) returns (Empty) {}
   rpc GetProcesses(Empty) returns (ProcessList) {}
   rpc CreateProcesses(CreateProcessesMessage) returns (Empty) {}
