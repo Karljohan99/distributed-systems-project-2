@@ -182,6 +182,9 @@ class ChainServicer(chain_pb2_grpc.UserServicer):
         node = int(head.split('-')[0])
         prc = int(head.split('-')[1])
         if node == self.id:
+            for p in self.processes:
+                if p.id != prc:
+                    self.processes[prc].books = p.books
             self.processes[prc].previous = self.pendingRemovalStr
         self.head = self.pendingRemovalStr
         self.pendingRemoval = None
